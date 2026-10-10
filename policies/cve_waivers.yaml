@@ -1,0 +1,20 @@
+# Production CVE Waivers & Compensating Control Registry
+# All waivers must have an approved security ticket, compensating controls, and expiration date.
+waivers:
+  - cve_id: "CVE-2023-44487"
+    pkg_name: "golang.org/x/net"
+    severity: "HIGH"
+    reason: "HTTP/2 Rapid Reset mitigation deployed at AWS ALB / Cloudflare WAF edge layer. Patch scheduled for next sprint release."
+    compensating_control: "WAF rate-limiting rule (ID: AWS-WAF-HTTP2-RapidReset) applied across all public ALBs."
+    approved_by: "secops-lead@platform.corp"
+    ticket: "SEC-4921"
+    expires_at: "2027-12-31T23:59:59+00:00"
+
+  - cve_id: "CVE-2023-38606"
+    pkg_name: "libxml2"
+    severity: "MEDIUM"
+    reason: "Vulnerable function not imported or reachable in microservice runtime binary."
+    compensating_control: "Static call graph analysis confirmed symbol xmlParseDocument is dead code."
+    approved_by: "appsec-auditor@platform.corp"
+    ticket: "SEC-5102"
+    expires_at: "2027-06-30T23:59:59+00:00"

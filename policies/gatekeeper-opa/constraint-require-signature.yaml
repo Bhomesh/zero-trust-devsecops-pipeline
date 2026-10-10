@@ -1,0 +1,15 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireCosignSignature
+metadata:
+  name: require-immutable-signatures
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - "production"
+      - "staging"
+  parameters:
+    allowedRegistries:
+      - "ghcr.io/bhomesh"

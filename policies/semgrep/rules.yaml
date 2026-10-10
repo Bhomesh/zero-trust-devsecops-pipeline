@@ -1,0 +1,25 @@
+rules:
+  - id: python-hardcoded-secret-token
+    patterns:
+      - pattern-either:
+          - pattern: $X = "ghp_..."
+          - pattern: $X = "AKIA[0-9A-Z]{16}"
+          - pattern: $X = "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+    message: "Hardcoded secret or credential token detected in source code. Use environment variables or Secrets Manager."
+    severity: ERROR
+    languages: [python, javascript, typescript, go]
+
+  - id: insecure-subprocess-shell-true
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+    message: "Potential Command Injection: subprocess invocation with shell=True is forbidden."
+    severity: ERROR
+    languages: [python]
+
+  - id: insecure-tls-skip-verify
+    patterns:
+      - pattern-either:
+          - pattern: "verify=False"
+          - pattern: "InsecureSkipVerify: true"
+    message: "Zero-Trust TLS violation: InsecureSkipVerify or verify=False bypasses certificate validation."
+    severity: ERROR
+    languages: [python, go]

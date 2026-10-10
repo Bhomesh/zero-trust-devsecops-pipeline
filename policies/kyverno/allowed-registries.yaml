@@ -1,0 +1,23 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Restrict Container Image Registries
+    policies.kyverno.io/category: Software Supply Chain Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  rules:
+    - name: validate-registry
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Images may only be pulled from approved enterprise registries (ghcr.io/bhomesh/*, *.dkr.ecr.*.amazonaws.com)."
+        pattern:
+          spec:
+            containers:
+              - image: "ghcr.io/bhomesh/* | *.dkr.ecr.*.amazonaws.com/* | gcr.io/distroless/*"

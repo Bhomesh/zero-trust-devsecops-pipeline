@@ -1,0 +1,104 @@
+name: Zero-Trust DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  security-events: write
+
+jobs:
+  secret-scan:
+    name: TruffleHog Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  sast-scan:
+    name: Semgrep Static Application Security Testing (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: policies/semgrep/rules.yaml
+          generateSarif: "semgrep.sarif"
+
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "semgrep.sarif"
+
+  build-and-sign:
+    name: Container Build, SBOM, Trivy Gating & Cosign Keyless Signing
+    runs-on: ubuntu-latest
+    needs: [secret-scan, sast-scan]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.16.0
+
+      - name: Build Container Image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }} sample-app/
+
+      - name: Generate CycloneDX SBOM with Syft
+        run: |
+          syft ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }} -o cyclonedx-json=sbom.cdx.json
+
+      - name: Trivy Vulnerability Scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: 'ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Container Image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }}
+
+      - name: Keyless Sign with Cosign (Sigstore Fulcio & Rekor)
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }}
+          cosign attest --yes --predicate sbom.cdx.json --type cyclonedx ghcr.io/${{ github.repository_owner }}/secure-service:${{ github.sha }}

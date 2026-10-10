@@ -1,0 +1,17 @@
+# TruffleHog Enterprise Configuration
+# Enables verification of secret findings against live identity providers
+enable_verification: true
+fail_on_verified: true
+exclude_paths:
+  - tests/fixtures/
+  - .git/
+  - vendor/
+detectors:
+  - AWS
+  - GitHub
+  - Slack
+  - PrivateKey
+  - OpenAI
+  - Anthropic
+  - Stripe
+  - Postman
