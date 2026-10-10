@@ -104,5 +104,27 @@ class TestCVEGatekeeper(unittest.TestCase):
         self.assertEqual(result["counts"]["waived"], 0)
 
 
+    def test_naive_date_string_waiver_parsing(self):
+        self._write_report([
+            {"VulnerabilityID": "CVE-2023-44487", "Severity": "HIGH", "PkgName": "golang.org/x/net"},
+        ])
+        waivers = {
+            "waivers": [
+                {
+                    "cve_id": "CVE-2023-44487",
+                    "reason": "Date string without timezone offset",
+                    "expires_at": "2030-12-31",
+                    "approved_by": "secops",
+                }
+            ]
+        }
+        with open(self.waiver_file, "w", encoding="utf-8") as f:
+            yaml.dump(waivers, f)
+
+        result = self.gatekeeper.evaluate(self.report_file, self.waiver_file)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["counts"]["waived"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

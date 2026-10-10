@@ -59,6 +59,8 @@ class CVEGatekeeper:
 
             try:
                 expires_at = datetime.fromisoformat(expires_at_str)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
                 if now < expires_at:
                     active_waivers[cve_id] = w
                 else:

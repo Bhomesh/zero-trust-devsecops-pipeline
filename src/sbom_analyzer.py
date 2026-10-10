@@ -33,13 +33,38 @@ class SBOMAnalyzer:
         "Commons-Clause",
     }
 
+    DEFAULT_RESTRICTED_LICENSES = {
+        "LGPL-2.1",
+        "LGPL-3.0",
+        "MPL-2.0",
+        "EPL-2.0",
+    }
+
     def __init__(
         self,
         allowed_licenses: Optional[Set[str]] = None,
+        restricted_licenses: Optional[Set[str]] = None,
         banned_licenses: Optional[Set[str]] = None,
+        enforce_allowlist: bool = False,
     ):
         self.allowed_licenses = allowed_licenses or self.DEFAULT_ALLOWED_LICENSES
+        self.restricted_licenses = restricted_licenses or self.DEFAULT_RESTRICTED_LICENSES
         self.banned_licenses = banned_licenses or self.DEFAULT_BANNED_LICENSES
+        self.enforce_allowlist = enforce_allowlist
+
+    @classmethod
+    def from_policy_file(cls, policy_path: Path, enforce_allowlist: bool = False) -> "SBOMAnalyzer":
+        """Factory initializing analyzer from corporate license_policy.yaml."""
+        if not policy_path.exists():
+            return cls(enforce_allowlist=enforce_allowlist)
+        with open(policy_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return cls(
+            allowed_licenses=set(data.get("allowed", [])),
+            restricted_licenses=set(data.get("restricted", [])),
+            banned_licenses=set(data.get("banned", [])),
+            enforce_allowlist=enforce_allowlist,
+        )
 
     def parse_sbom(self, sbom_path: Path) -> List[Dict[str, Any]]:
         """Parses CycloneDX or SPDX JSON format SBOM."""
@@ -90,6 +115,7 @@ class SBOMAnalyzer:
         """Audits all packages in SBOM against licensing rules."""
         components = self.parse_sbom(sbom_path)
         violations: List[str] = []
+        warnings: List[str] = []
         license_counts: Dict[str, int] = {}
 
         for c in components:
@@ -99,11 +125,21 @@ class SBOMAnalyzer:
                     violations.append(
                         f"BANNED LICENSE VIOLATION: Package '{c['name']}@{c['version']}' uses prohibited license '{lic}'"
                     )
+                elif lic in self.restricted_licenses:
+                    warnings.append(
+                        f"RESTRICTED LICENSE: Package '{c['name']}@{c['version']}' uses restricted license '{lic}' (requires legal review)"
+                    )
+                elif self.enforce_allowlist and lic not in self.allowed_licenses:
+                    violations.append(
+                        f"UNAPPROVED LICENSE VIOLATION: Package '{c['name']}@{c['version']}' uses license '{lic}' which is not in corporate allowlist"
+                    )
 
         passed = len(violations) == 0
         summary = {
             "total_components": len(components),
             "licenses_observed": license_counts,
             "violations_count": len(violations),
+            "warnings_count": len(warnings),
+            "warnings": warnings,
         }
         return passed, violations, summary
